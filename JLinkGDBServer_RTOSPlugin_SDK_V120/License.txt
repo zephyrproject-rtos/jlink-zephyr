@@ -1,0 +1,42 @@
+Important - Read carefully:
+
+This is a legal agreement between YOU as an individual and SEGGER Microcontroller GmbH (hereafter called SEGGER).
+All IP rights, title and interest in the GDBServer RTOS Plug-in SDK (hereafter called Plug-in SDK) is and shall at all times remain with SEGGER.
+The Plug-in SDK allows you to write an own RTOS plug-in for the J-Link GDB server. 
+Prior use of the Plug-in SDK YOU agree to be bound by the terms of this agreement.
+The Plug-in SDK is licensed and not sold to YOU for use only under the terms of this agreement. 
+YOU acknowledge and agree that the Plug-in SDK consists of proprietary and copyright protected components. Title, ownership rights, and intellectual property rights in the 
+Plug-in SDK shall remain by SEGGER. YOU acknowledge such ownership and intellectual property rights and YOU will not take any action to jeopardize, limit or interfere in any manner with SEGGER ownership rights.
+
+
+1. License Grant
+The Plug-in SDK is provided in source code form.
+YOU may use the Plug-in SDK for personal or for commercial purposes. 
+The Plug-in developed by YOU can be shipped or distributed by YOU in source code and/or binary form free of charge only.
+
+
+2. RESTRICTIONS
+YOU may not:
+(a) decompile, disassemble, reverse engineer, or otherwise attempt to derive the source code of Plug-in SDK components (if any) provided in binary or executable code form, 
+(b) redistribute, encumber, sell, rent, lease, sublicense, or otherwise transfer rights to the Plug-in SDK,
+(c) remove or alter any trademark, logo, copyright or other proprietary notices, legends, symbols or label in the Plug-in SDK, 
+(d) use the GDBServer RTOS Plug-in for any competitive product
+
+Without prejudice to any other rights, SEGGER may terminate this agreement if YOU fail to comply with foregoing restrictions.
+
+3. FEES
+The Plug-in SDK can be used free of charge without purchasing a license. The Plug-in SDK is licensed and not sold to YOU for use only under the terms of this agreement. YOU acknowledge and agree that the product consists of proprietary, unpublished products of SEGGER, protected under copyright and trade secret laws. Title, ownership rights, and intellectual property rights in the product shall remain by SEGGER and/or its suppliers. Licensee acknowledges such ownership and intellectual property rights and will not take any action to jeopardize, limit or interfere in any manner with SEGGER or its suppliers' ownership of or rights with respect to the product.
+
+4. DISCLAIMER OF WARRANTY
+The Plug-in SDK is provided on an "as is" basis, without warranty of any kind or support from SEGGER, including without limitation the warranties that it is free of defects, merchantable, fit for a particular purpose or non-infringing. This disclaimer of warranty constitutes an essential part of this agreement. No use of the Plug-in SDK is authorized hereunder except under this disclaimer.
+
+5. LIMITATION OF LIABILITY
+To the maximum extent permitted by applicable law, in no event will SEGGER be liable for any indirect, special, incidental or consequential damages arising out of the use of or inability to use The Plug-in SDK, including, without limitation, damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other damages or losses, even if advised of the possibility thereof, and regardless of the legal or equitable theory (contract, tort or otherwise) upon which the claim is based.  Some jurisdictions do not allow the exclusion or limitation of incidental or consequential damages, so this exclusion and limitation may not be applicable. In any case, SEGGER's entire liability shall not exceed in aggregate the sum of the fees YOU paid for the Plug-in SDK (if any).
+
+6. MISCELLANEOUS
+(a) This agreement shall be governed by the laws of the Federal Republic of Germany. This agreement constitutes the entire agreement between the parties concerning the subject matter hereof. 
+(b) If any provision in this agreement should be held illegal or unenforceable by a court having jurisdiction, such provision shall be modified to the extent necessary to render it enforceable without losing its intent, or severed from this agreement if no such modification is possible, and other provisions of this agreement shall remain in full force and effect.This agreement may be changed only by an amendment in writing, signed by both parties.
+(c) If any SEGGER  professional services are being provided, then such professional services are provided pursuant to the terms of a separate agreement.
+
+
+

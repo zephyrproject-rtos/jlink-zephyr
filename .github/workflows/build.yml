@@ -1,0 +1,86 @@
+name: 'Build and test'
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - master
+
+jobs:
+  build-linux:
+    name: Build and test (linux)
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [32, 64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install 32bit cross compilation libs
+        if: ${{matrix.arch == '32' }}
+        run: sudo apt-get install -y libc6-dev-i386 gcc-multilib
+
+      - name: Generate CMake
+        run: cmake -DCMAKE_C_FLAGS=-m${{ matrix.arch }} -B build
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: linux-${{matrix.arch == '32' && 'x86' || 'x64'}}
+          path: build/libzephyr_rtos.so
+
+      - name: Run unit tests
+        run: ./build/unittests/plugin_test
+
+
+  build-nix:
+    name: Build and test (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Generate CMake
+        # Create universal build:
+        run: cmake -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -B build
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: macos-universal
+          path: build/libzephyr_rtos.so
+
+      - name: Run unit tests
+        run: ./build/unittests/plugin_test
+
+
+  build-win:
+    name: Build and test (Windows)
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [win32, x64]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Generate CMake
+        run: cmake -A ${{ matrix.arch }} -B build
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{runner.os}}-${{matrix.arch == 'win32' && 'x86' || 'x64'}}
+          path: build/Release/zephyr_rtos.dll
+
+      - name: Run unit tests
+        run: ./build/unittests/Release/plugin_test.exe
