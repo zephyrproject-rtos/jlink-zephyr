@@ -13,7 +13,7 @@ The following files are directly coming from Segger SDK:
 * `RTOSPlugin.h`
 * `TYPES.h`
 
-See file [License.txt](JLinkGDBServer_RTOSPlugin_SDK_V120/License_SDK.txt) for Segger SDK license.
+See file [License.txt](JLinkGDBServer_RTOSPlugin_SDK_V120/License.txt) for Segger SDK license.
 
 All other plugin files are licensed under Apache-2.0.
 
