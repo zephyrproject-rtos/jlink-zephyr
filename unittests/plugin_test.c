@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -14,6 +15,7 @@
 
 #include "acutest.h"
 
+#define GDB_NO_THREAD   0xDEAD
 
 /*************************
  * Dummy data
@@ -76,17 +78,21 @@ struct stack {
 struct dummy_data {
 	uint32_t padding[1]; // Cannot start from offset zero.
 	struct my_kernel kernel;
+	bool post_kernel;
 	uint32_t debug_offsets[LEN_DEBUG_OFFSETS];
 	struct my_thread thread1;
 	struct my_thread thread2;
 	struct stack stack;
 	uint8_t extra_mem[2048];
-} dummy_data = {
+};
+
+struct dummy_data dummy_data = {
 	.kernel = {
 		.version = 1,
 		.current = offsetof(struct dummy_data, thread1),
 		.threads = offsetof(struct dummy_data, thread1)
 	},
+	.post_kernel = true,
 	.thread1 = {
 		.name = "First Thread",
 		.saved = {.psp = offsetof(struct dummy_data, stack) },
@@ -115,7 +121,33 @@ struct dummy_data {
 	}
 };
 
-uint8_t *mem = (uint8_t *) &dummy_data;
+struct dummy_data boot_dummy_data = {
+	.kernel = {
+		.version = 1,
+		.current = 0,
+		.threads = 0
+	},
+	.post_kernel = false,
+	.stack = {
+		.r0 = 0xdeadbeef,
+		.pc = 0xcafebabe,
+	},
+	.debug_offsets = {
+	offsetof(struct my_kernel, version),
+	offsetof(struct my_kernel, current),
+	offsetof(struct my_kernel, threads),
+	offsetof(struct my_thread, next),
+	offsetof(struct my_thread, next),
+	offsetof(struct my_thread, state),
+	offsetof(struct my_thread, state),
+	offsetof(struct my_thread, priority),
+	offsetof(struct my_thread, saved.psp),
+	offsetof(struct my_thread, name),
+	offsetof(struct my_thread, arch),
+	}
+};
+
+uint8_t *mem;
 
 
 
@@ -265,10 +297,12 @@ void test_init(void)
 	TEST_ASSERT(symbols != NULL);
 	symbols[0].address = offsetof(struct dummy_data, kernel);
 	symbols[1].address = offsetof(struct dummy_data, debug_offsets);
+	symbols[4].address = offsetof(struct dummy_data, post_kernel);
 }
 
 void test_parsing(void)
 {
+	mem = (uint8_t *) &dummy_data;
 	test_init();
 	int ret = RTOS_UpdateThreads();
 	TEST_ASSERT(ret == 0);
@@ -295,8 +329,41 @@ void test_parsing(void)
 	RTOS_Init(&api, 0);
 }
 
+void test_boot(void)
+{
+	mem = (uint8_t *) &boot_dummy_data;
+	test_init();
+
+	// Order of calls matches what is seen from JlinkGDBServer
+	uint32_t n = RTOS_GetNumThreads();
+	TEST_CHECK(n == 1);
+
+	int ret = RTOS_UpdateThreads();
+	TEST_ASSERT(ret == -1);
+
+	TEST_CHECK(RTOS_GetThreadId(0) == GDB_NO_THREAD);
+
+	char display[32];
+	ret = RTOS_GetThreadDisplay(display, GDB_NO_THREAD);
+	TEST_ASSERT(ret > 0);
+
+	n = RTOS_GetNumThreads();
+	TEST_CHECK(n == 1);
+
+	uint32_t id = RTOS_GetCurrentThreadId();
+	TEST_CHECK(id == GDB_NO_THREAD);
+
+	char val[10];
+	ret = RTOS_GetThreadReg(val, RTOS_PLUGIN_CPU_REG_CORTEX_M_PC, id);
+	TEST_CHECK(ret == -1);
+
+	// Force clear
+	RTOS_Init(&api, 0);
+}
+
 TEST_LIST = {
    { "test_init", test_init },
    { "test_parsing", test_parsing},
+   { "test_boot", test_boot},
    { NULL, NULL }     /* zeroed record marking the end of the list */
 };

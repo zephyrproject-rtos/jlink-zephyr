@@ -39,6 +39,11 @@
 #define JLINK_CORE_CORTEX_M_V8MAINL 0x0E0200FF
 
 /**
+ * Magic number used by GDB when no thread is running.
+ */
+#define GDB_NO_THREAD   0xDEAD
+
+/**
  * List of debug information that Zephyr exposes.
  *
  * When Zephyr kernel is build with CONFIG_THREAD_INFO it exposes
@@ -168,7 +173,7 @@ bool threads_updated = false;
 /** Head of thread list */
 struct thread_t *threads_head = NULL;
 /** Currently running thread */
-uint32_t current_base = 0;
+uint32_t current_base = GDB_NO_THREAD;
 /* size_t size */
 uint8_t size_t_size = 0;
 /** Num thread offset */
@@ -238,7 +243,7 @@ static void clear(void)
         p = q;
     }
     threads_head = NULL;
-    current_base = 0;
+    current_base = GDB_NO_THREAD;
 }
 
 struct thread_t *base_to_thread(uint32_t base) {
@@ -291,7 +296,8 @@ static void update_handler_thread(void)
 #endif
         t = new_thread();
         sprintf(t->name, "EXCEPTION/INTERRUPT");
-        current_base = 0;
+        t->base = GDB_NO_THREAD;
+        current_base = GDB_NO_THREAD;
     }
 }
 
@@ -555,7 +561,7 @@ EXPORT uint32_t RTOS_GetThreadId(uint32_t n) {
     if (t)
         return t->base;
     else
-        return 0;
+        return current_base;
 }
 
 EXPORT int RTOS_GetThreadDisplay(char *pDisplay, uint32_t threadid) {
@@ -753,7 +759,7 @@ EXPORT int RTOS_UpdateThreads(void) {
 
 EXPORT uint32_t RTOS_GetNumThreads(void) {
 #if !defined(_NO_DEBUG_LOG) && VERBOSE_LOGGING
-    api->pfLogOutf("%s() --> %d\n", __func__, n_threads());
+    api->pfLogOutf("%s()\n", __func__);
 #endif
     /* RTOS_GetNumThreads can be called before RTOS_UpdateThreads when first
      * attaching a debugger. As RTOS_UpdateThreads populates the thread
@@ -763,9 +769,17 @@ EXPORT uint32_t RTOS_GetNumThreads(void) {
      * immediately.
      */
     if (!threads_updated) {
-        if (RTOS_UpdateThreads() < 0) {
-            return 0;
-        }
+        RTOS_UpdateThreads();
     }
-    return n_threads();
+    uint32_t threads = n_threads();
+    /* GDB gets confused if there is no thread running. Consider the current
+     * execution context a thread even if the kernel has not started yet.
+     */
+    if( threads == 0 ) {
+        threads = 1;
+    }
+#if !defined(_NO_DEBUG_LOG) && VERBOSE_LOGGING
+    api->pfLogOutf("%s() returned %u\n", __func__, threads);
+#endif
+    return threads;
 }

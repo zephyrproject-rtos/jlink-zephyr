@@ -118,10 +118,3 @@ This will most likely break the usage of other plugins until the backup is resto
 * Other Arm cores than Cortex-M33: This plugin has only been tested initially on nrf9160dk, and no work has been done to verify differences between Arm architectures on Zephyr.
 * Other than Arm cores: Zero effort has been used to other architectures, and the plugin does not even check the core parameter, so it might probably crash or show garbage values.
 * Distributing the built .DLL file in Windows requires user to install [Visual C++ Redistributable](https://support.microsoft.com/en-us/topic/the-latest-supported-visual-c-downloads-2647da03-1eea-4433-9aff-95f26a218cc0) on a target machine.
-
-
-## Known problems in JLinkGDBServer
-
-* When `RTOS_GetNumThreads()` returns zero, GDB server still calls `RTOS_GetThreadRegList()` with thread id zero and generates a new dummy thread for GDB. This breaks debugging of the board startup.
-* There is no easy way to tell GDBServer that CPU is not yet running in Thread mode, and therefore
-  plugin should be ignored.
