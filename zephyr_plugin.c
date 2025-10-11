@@ -564,7 +564,7 @@ EXPORT int RTOS_GetThreadDisplay(char *pDisplay, uint32_t threadid) {
     api->pfLogOutf("%s(*, %d)\n", __func__, threadid);
 #endif
     if (t) {
-        return sprintf(pDisplay, "%.32s %s PRIO %hhu", t->name, state_to_str(t), t->prio);
+        return sprintf(pDisplay, "%.32s %s PRIO %hhd", t->name, state_to_str(t), t->prio);
     }
     return sprintf(pDisplay, "Unknown thread");
 }
