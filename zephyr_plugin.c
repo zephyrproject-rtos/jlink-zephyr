@@ -670,7 +670,9 @@ EXPORT int RTOS_UpdateThreads(void) {
 #endif
     threads_updated = true;
 
-    if (thread_info_offsets_addr == 0 || kern_addr == 0) {
+    if ((kern_addr == 0) || (thread_info_offsets_addr == 0) ||
+        (thread_info_num_offsets_addr == 0) ||
+        (thread_info_size_t_size_addr == 0)) {
         api->pfLogOutf("RTOS_UpdateThreads() thread_info symbols not found\n");
         return -1;
     }
