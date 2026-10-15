@@ -81,6 +81,16 @@ uint32_t debug_offsets[LEN_DEBUG_OFFSETS];
 #define EXC_RETURN_FTYPE_STANDARD EXC_RETURN_FTYPE_MASK
 #define EXC_RETURN_FTYPE_EXTENDED 0
 
+#define XPSR_EXCEPTION_NUMBER_MASK 0x1ff
+#define XPSR_THUMB_STATE           (1 << 24)
+
+/* Armv8-M Debug Core Block registers and register selector for PSP_NS. */
+#define DCB_DHCSR                  0xe000edf0
+#define DCB_DCRSR                  0xe000edf4
+#define DCB_DCRDR                  0xe000edf8
+#define DCB_DHCSR_S_REGRDY         (1 << 16)
+#define DCB_DCRSR_PSP_NS           0x19
+
 /** @defgroup zep_k_states Zephyr Kernel states.
  * See kernel_structs.h and ksched.h on Zephyr for more information.
  * @{
@@ -162,6 +172,7 @@ struct thread_t
     int8_t prio;
     bool registers_loaded;
     bool extended_stack_frame;
+    uint32_t exception_stack_frame;
     struct stack stack;
     struct extended_stack extended_stack;
     struct saved_registers saved;
@@ -210,6 +221,7 @@ static RTOS_SYMBOLS _Symbols[] = {
 
 /** JLink GDBServer API */
 static const GDB_API *api = NULL;
+static uint32_t jlink_core = JLINK_CORE_NONE;
 
 
 struct thread_t *new_thread(void)
@@ -282,14 +294,87 @@ struct thread_t *thread(int n)
  * @brief check if we need to have dummy handler thread for interrupt context.
  *
  */
+static bool read_debug_core_register(uint32_t selector, uint32_t *value)
+{
+    uint32_t dhcsr;
+    int i;
+
+    api->pfWriteU32(DCB_DCRSR, selector);
+    for (i = 0; i < 100; i++) {
+        if (api->pfReadU32(DCB_DHCSR, &dhcsr)) {
+            return false;
+        }
+        if (dhcsr & DCB_DHCSR_S_REGRDY) {
+            return api->pfReadU32(DCB_DCRDR, value) == 0;
+        }
+    }
+    return false;
+}
+
+static bool valid_exception_stack_frame(uint32_t addr)
+{
+    struct stack frame;
+
+    if ((addr == 0) || (addr & (sizeof(uint32_t) - 1))) {
+        return false;
+    }
+    if (api->pfReadMem(addr, (char *)&frame, sizeof(frame)) < (int)sizeof(frame)) {
+        return false;
+    }
+
+    /* A stacked Cortex-M frame must resume in Thumb state. EXC_RETURN values
+     * and NULL are not executable return addresses.
+     */
+    return (frame.xpsr & XPSR_THUMB_STATE) && (frame.pc != 0) &&
+           ((frame.pc & 1) == 0) && ((frame.pc & 0xff000000) != 0xff000000);
+}
+
+static uint32_t active_exception_stack_frame(void)
+{
+    uint32_t psp = api->pfReadReg(RTOS_PLUGIN_CPU_REG_CORTEX_M_PSP);
+
+    if (valid_exception_stack_frame(psp)) {
+        return psp;
+    }
+
+    /* When a non-secure Zephyr thread faults into a secure handler, PSP
+     * refers to PSP_S. The interrupted frame is instead at PSP_NS, which is
+     * not exposed by the RTOS plug-in API. Read it through the Armv8-M Debug
+     * Core Block.
+     */
+    if ((jlink_core == JLINK_CORE_CORTEX_M_V8MAINL) ||
+        (jlink_core == JLINK_CORE_CORTEX_M_V8BASEL)) {
+        uint32_t psp_ns;
+
+        if (read_debug_core_register(DCB_DCRSR_PSP_NS, &psp_ns) &&
+            valid_exception_stack_frame(psp_ns)) {
+            return psp_ns;
+        }
+    }
+
+    return 0;
+}
+
 static void update_handler_thread(void)
 {
- #define SPSEL (1<<1)
+    uint32_t xpsr = api->pfReadReg(RTOS_PLUGIN_CPU_REG_CORTEX_M_XPSR);
 
-    // Check CONTROL.SPSEL if we are in interrupt/excepion or reset
-    uint32_t control = api->pfReadReg(RTOS_PLUGIN_CPU_REG_CORTEX_M_CONTROL);
-    if ((control & SPSEL) == 0) {
+    /* IPSR is non-zero in Handler mode. CONTROL.SPSEL cannot distinguish a
+     * handler from a thread using MSP and selects a banked register in
+     * TrustZone systems.
+     */
+    if (xpsr & XPSR_EXCEPTION_NUMBER_MASK) {
+        struct thread_t *interrupted = base_to_thread(current_base);
+        uint32_t frame = active_exception_stack_frame();
         struct thread_t *t;
+
+        if (interrupted && frame) {
+            interrupted->exception_stack_frame = frame;
+#ifndef _NO_DEBUG_LOG
+            api->pfLogOutf("Unwinding interrupted thread 0x%x from exception frame 0x%x\n",
+                           interrupted->base, frame);
+#endif
+        }
         // We must show the handler thread as well
 #ifndef _NO_DEBUG_LOG
         api->pfLogOutf("%s(): Adding handler thread\n", __func__);
@@ -407,6 +492,14 @@ static int read_stack(struct thread_t *t) {
         return ret;
     }
 
+    /* The k_thread PSP is only updated during a context switch. If this is
+     * the thread interrupted by the active exception, use the hardware's
+     * exception frame instead.
+     */
+    if (t->exception_stack_frame) {
+        t->saved.psp = t->exception_stack_frame;
+    }
+
     /* Fetch content of the stack using PSP */
     ret = api->pfReadMem(t->saved.psp, (char*)&t->stack, sizeof(t->stack));
     if (ret < (int) sizeof(t->stack)) {
@@ -513,6 +606,7 @@ static uint32_t swap_endianess(uint32_t x)
 
 EXPORT int RTOS_Init(const GDB_API *pAPI, uint32_t core) {
     api = pAPI;
+    jlink_core = core;
     clear();
 #ifndef _NO_DEBUG_LOG
     api->pfLogOutf("%s() core = %d\n", __func__, core);
