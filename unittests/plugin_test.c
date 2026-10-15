@@ -148,6 +148,16 @@ struct dummy_data boot_dummy_data = {
 };
 
 uint8_t *mem;
+static uint32_t mock_xpsr;
+static uint32_t mock_psp;
+static uint32_t mock_psp_ns;
+static uint32_t mock_dcrsr;
+
+#define DCB_DHCSR 0xe000edf0
+#define DCB_DCRSR 0xe000edf4
+#define DCB_DCRDR 0xe000edf8
+#define DCB_DHCSR_S_REGRDY (1 << 16)
+#define DCB_DCRSR_PSP_NS 0x19
 
 
 
@@ -198,6 +208,14 @@ char pfReadU16(U32 Addr, U16* pData)
 
 char pfReadU32(U32 Addr, U32* pData)
 {
+	if (Addr == DCB_DHCSR) {
+		*pData = DCB_DHCSR_S_REGRDY;
+		return 0;
+	}
+	if (Addr == DCB_DCRDR) {
+		*pData = (mock_dcrsr == DCB_DCRSR_PSP_NS) ? mock_psp_ns : 0;
+		return 0;
+	}
 	memcpy(pData, &mem[Addr], 4);
 	return 0;
 }
@@ -220,6 +238,10 @@ void pfWriteU16(U32 Addr, U16 Data)
 
 void pfWriteU32(U32 Addr, U32 Data)
 {
+	if (Addr == DCB_DCRSR) {
+		mock_dcrsr = Data;
+		return;
+	}
 	memcpy(&mem[Addr], &Data, 4);
 }
 
@@ -245,7 +267,13 @@ U32 pfLoad32TE(const U8* p)
 
 U32 pfReadReg(U32 RegIndex)
 {
-	return 0xdeadbeef;
+	if (RegIndex == RTOS_PLUGIN_CPU_REG_CORTEX_M_XPSR) {
+		return mock_xpsr;
+	}
+	if (RegIndex == RTOS_PLUGIN_CPU_REG_CORTEX_M_PSP) {
+		return mock_psp;
+	}
+	return 0;
 }
 
 static GDB_API api =
@@ -289,6 +317,10 @@ extern int RTOS_UpdateThreads();
 
 void test_init(void)
 {
+	mock_xpsr = 0;
+	mock_psp = 0;
+	mock_psp_ns = 0;
+	mock_dcrsr = 0;
 	/* Hardcoded Cortex-M3 core identifier */
 	int ret = RTOS_Init(&api, 0x030000FF);
 	TEST_ASSERT(ret == 1);
@@ -298,6 +330,68 @@ void test_init(void)
 	symbols[0].address = offsetof(struct dummy_data, kernel);
 	symbols[1].address = offsetof(struct dummy_data, debug_offsets);
 	symbols[4].address = offsetof(struct dummy_data, post_kernel);
+}
+
+void test_secure_exception(void)
+{
+	mem = (uint8_t *) &dummy_data;
+	test_init();
+
+	/* Re-initialize as Armv8-M and model a secure handler whose secure PSP
+	 * does not contain an exception frame. The interrupted Zephyr frame is
+	 * on PSP_NS.
+	 */
+	TEST_ASSERT(RTOS_Init(&api, 0x0E0200FF) == 1);
+	mock_xpsr = (1 << 24) | 7;
+	mock_psp = offsetof(struct dummy_data, extra_mem);
+	mock_psp_ns = offsetof(struct dummy_data, stack);
+	dummy_data.stack.xpsr = (1 << 24);
+
+	int ret = RTOS_UpdateThreads();
+	TEST_ASSERT(ret == 0);
+	TEST_CHECK(RTOS_GetNumThreads() == 3);
+	TEST_CHECK(RTOS_GetCurrentThreadId() == GDB_NO_THREAD);
+	char display[64];
+	ret = RTOS_GetThreadDisplay(display, GDB_NO_THREAD);
+	TEST_CHECK(ret > 0);
+	TEST_CHECK(0 == strncmp("SecureFault (from 'First Thread') ", display,
+			strlen("SecureFault (from 'First Thread') ")));
+
+	uint32_t interrupted = offsetof(struct dummy_data, thread1);
+	char val[10];
+	ret = RTOS_GetThreadReg(val, RTOS_PLUGIN_CPU_REG_CORTEX_M_PC, interrupted);
+	TEST_CHECK(ret == 0);
+	TEST_CHECK(0 == strcmp("bebafeca", val));
+
+	ret = RTOS_GetThreadReg(val, RTOS_PLUGIN_CPU_REG_CORTEX_M_SP, interrupted);
+	TEST_CHECK(ret == 0);
+	uint32_t expected_sp = mock_psp_ns + sizeof(struct stack);
+	char expected[10];
+	sprintf(expected, "%02x%02x%02x%02x", expected_sp & 0xff,
+		(expected_sp >> 8) & 0xff, (expected_sp >> 16) & 0xff,
+		(expected_sp >> 24) & 0xff);
+	TEST_CHECK(0 == strcmp(expected, val));
+
+	dummy_data.stack.xpsr = 0;
+	RTOS_Init(&api, 0);
+}
+
+void test_external_interrupt_name(void)
+{
+	mem = (uint8_t *) &dummy_data;
+	test_init();
+
+	mock_xpsr = (1 << 24) | (16 + 42);
+	int ret = RTOS_UpdateThreads();
+	TEST_ASSERT(ret == 0);
+
+	char display[64];
+	ret = RTOS_GetThreadDisplay(display, GDB_NO_THREAD);
+	TEST_CHECK(ret > 0);
+	TEST_CHECK(0 == strncmp("IRQ 42 (from 'First Thread') ", display,
+			strlen("IRQ 42 (from 'First Thread') ")));
+
+	RTOS_Init(&api, 0);
 }
 
 void test_parsing(void)
@@ -364,6 +458,8 @@ void test_boot(void)
 TEST_LIST = {
    { "test_init", test_init },
    { "test_parsing", test_parsing},
+   { "test_secure_exception", test_secure_exception},
+   { "test_external_interrupt_name", test_external_interrupt_name},
    { "test_boot", test_boot},
    { NULL, NULL }     /* zeroed record marking the end of the list */
 };
