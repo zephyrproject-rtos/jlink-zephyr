@@ -37,6 +37,7 @@
 #define JLINK_CORE_CORTEX_M4        0x0E0000FF
 #define JLINK_CORE_CORTEX_M7        0x0E0100FF
 #define JLINK_CORE_CORTEX_M_V8MAINL 0x0E0200FF
+#define JLINK_CORE_CORTEX_M55       0x0E0300FF
 
 /**
  * Magic number used by GDB when no thread is running.
@@ -529,8 +530,10 @@ EXPORT int RTOS_Init(const GDB_API *pAPI, uint32_t core) {
     case JLINK_CORE_CORTEX_M7:
     case JLINK_CORE_CORTEX_M_V8MAINL:
     case JLINK_CORE_CORTEX_M_V8BASEL:
+    case JLINK_CORE_CORTEX_M55:
         return 1;
     default:
+        api->pfLogOutf("%s() Unsupported core!\n", __func__);
         return 0;
     }
 }
