@@ -354,7 +354,8 @@ void test_secure_exception(void)
 	char display[64];
 	ret = RTOS_GetThreadDisplay(display, GDB_NO_THREAD);
 	TEST_CHECK(ret > 0);
-	TEST_CHECK(0 == strncmp("SecureFault ", display, strlen("SecureFault ")));
+	TEST_CHECK(0 == strncmp("SecureFault (from 'First Thread') ", display,
+			strlen("SecureFault (from 'First Thread') ")));
 
 	uint32_t interrupted = offsetof(struct dummy_data, thread1);
 	char val[10];
@@ -387,7 +388,8 @@ void test_external_interrupt_name(void)
 	char display[64];
 	ret = RTOS_GetThreadDisplay(display, GDB_NO_THREAD);
 	TEST_CHECK(ret > 0);
-	TEST_CHECK(0 == strncmp("IRQ 42 ", display, strlen("IRQ 42 ")));
+	TEST_CHECK(0 == strncmp("IRQ 42 (from 'First Thread') ", display,
+			strlen("IRQ 42 (from 'First Thread') ")));
 
 	RTOS_Init(&api, 0);
 }
