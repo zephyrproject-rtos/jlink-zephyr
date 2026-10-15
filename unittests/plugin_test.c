@@ -443,6 +443,23 @@ void test_parsing(void)
 	RTOS_Init(&api, 0);
 }
 
+void test_missing_symbols(void)
+{
+	mem = (uint8_t *) &dummy_data;
+	test_init();
+
+	RTOS_SYMBOLS *symbols = RTOS_GetSymbols();
+	for (int i = 0; i < 4; i++) {
+		uint32_t address = symbols[i].address;
+
+		symbols[i].address = 0;
+		TEST_CHECK(RTOS_UpdateThreads() == -1);
+		symbols[i].address = address;
+	}
+
+	RTOS_Init(&api, 0);
+}
+
 void test_boot(void)
 {
 	mem = (uint8_t *) &boot_dummy_data;
@@ -480,6 +497,7 @@ TEST_LIST = {
    { "test_parsing", test_parsing},
    { "test_secure_exception", test_secure_exception},
    { "test_external_interrupt_name", test_external_interrupt_name},
+   { "test_missing_symbols", test_missing_symbols},
    { "test_boot", test_boot},
    { NULL, NULL }     /* zeroed record marking the end of the list */
 };
