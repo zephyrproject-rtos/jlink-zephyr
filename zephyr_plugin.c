@@ -84,6 +84,10 @@ uint32_t debug_offsets[LEN_DEBUG_OFFSETS];
 #define XPSR_EXCEPTION_NUMBER_MASK 0x1ff
 #define XPSR_THUMB_STATE           (1 << 24)
 
+#define ZEPHYR_THREAD_NAME_SIZE    32
+#define DISPLAY_THREAD_NAME_SIZE   64
+#define HANDLER_NAME_SIZE          22
+
 /* Armv8-M Debug Core Block registers and register selector for PSP_NS. */
 #define DCB_DHCSR                  0xe000edf0
 #define DCB_DCRSR                  0xe000edf4
@@ -166,7 +170,7 @@ struct extended_stack {
  */
 struct thread_t
 {
-    char name[32];
+    char name[DISPLAY_THREAD_NAME_SIZE];
     uint32_t base;
     uint8_t state;
     int8_t prio;
@@ -355,8 +359,10 @@ static uint32_t active_exception_stack_frame(void)
     return 0;
 }
 
-static void set_handler_thread_name(struct thread_t *t, uint32_t exception_number)
+static void set_handler_thread_name(struct thread_t *t, uint32_t exception_number,
+                                    const struct thread_t *interrupted)
 {
+    char handler_name[HANDLER_NAME_SIZE];
     const char *name;
 
     switch (exception_number) {
@@ -395,14 +401,21 @@ static void set_handler_thread_name(struct thread_t *t, uint32_t exception_numbe
         break;
     default:
         if (exception_number >= 16) {
-            snprintf(t->name, sizeof(t->name), "IRQ %u", exception_number - 16);
+            snprintf(handler_name, sizeof(handler_name), "IRQ %u", exception_number - 16);
         } else {
-            snprintf(t->name, sizeof(t->name), "Reserved exception %u", exception_number);
+            snprintf(handler_name, sizeof(handler_name), "Reserved exception %u", exception_number);
         }
-        return;
+        name = handler_name;
+        break;
     }
 
-    snprintf(t->name, sizeof(t->name), "%s", name);
+    if (interrupted) {
+        snprintf(t->name, sizeof(t->name), "%.*s (from '%.*s')",
+                 HANDLER_NAME_SIZE - 1, name,
+                 ZEPHYR_THREAD_NAME_SIZE, interrupted->name);
+    } else {
+        snprintf(t->name, sizeof(t->name), "%s", name);
+    }
 }
 
 static void update_handler_thread(void)
@@ -431,7 +444,7 @@ static void update_handler_thread(void)
         api->pfLogOutf("%s(): Adding handler thread\n", __func__);
 #endif
         t = new_thread();
-        set_handler_thread_name(t, exception_number);
+        set_handler_thread_name(t, exception_number, interrupted);
         t->base = GDB_NO_THREAD;
         current_base = GDB_NO_THREAD;
     }
@@ -582,7 +595,8 @@ static int parse_thread(uint32_t thread_base, uint32_t *next_thread)
     t->base = thread_base;
 
     /* Fetch name */
-    r = api->pfReadMem(t->base + debug_offsets[OFFSET_THREAD_NAME], (char *)&t->name, 32);
+    r = api->pfReadMem(t->base + debug_offsets[OFFSET_THREAD_NAME], (char *)&t->name,
+                       ZEPHYR_THREAD_NAME_SIZE);
     if (r < 1) {
          api->pfLogOutf("pfReadMem() ret %d\n", r);
          return -1;
@@ -715,7 +729,7 @@ EXPORT int RTOS_GetThreadDisplay(char *pDisplay, uint32_t threadid) {
     api->pfLogOutf("%s(*, %d)\n", __func__, threadid);
 #endif
     if (t) {
-        return sprintf(pDisplay, "%.32s %s PRIO %hhd", t->name, state_to_str(t), t->prio);
+        return sprintf(pDisplay, "%.63s %s PRIO %hhd", t->name, state_to_str(t), t->prio);
     }
     return sprintf(pDisplay, "Unknown thread");
 }
