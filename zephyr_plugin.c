@@ -355,15 +355,66 @@ static uint32_t active_exception_stack_frame(void)
     return 0;
 }
 
+static void set_handler_thread_name(struct thread_t *t, uint32_t exception_number)
+{
+    const char *name;
+
+    switch (exception_number) {
+    case 1:
+        name = "Reset";
+        break;
+    case 2:
+        name = "NMI";
+        break;
+    case 3:
+        name = "HardFault";
+        break;
+    case 4:
+        name = "MemManage";
+        break;
+    case 5:
+        name = "BusFault";
+        break;
+    case 6:
+        name = "UsageFault";
+        break;
+    case 7:
+        name = "SecureFault";
+        break;
+    case 11:
+        name = "SVCall";
+        break;
+    case 12:
+        name = "DebugMonitor";
+        break;
+    case 14:
+        name = "PendSV";
+        break;
+    case 15:
+        name = "SysTick";
+        break;
+    default:
+        if (exception_number >= 16) {
+            snprintf(t->name, sizeof(t->name), "IRQ %u", exception_number - 16);
+        } else {
+            snprintf(t->name, sizeof(t->name), "Reserved exception %u", exception_number);
+        }
+        return;
+    }
+
+    snprintf(t->name, sizeof(t->name), "%s", name);
+}
+
 static void update_handler_thread(void)
 {
     uint32_t xpsr = api->pfReadReg(RTOS_PLUGIN_CPU_REG_CORTEX_M_XPSR);
+    uint32_t exception_number = xpsr & XPSR_EXCEPTION_NUMBER_MASK;
 
     /* IPSR is non-zero in Handler mode. CONTROL.SPSEL cannot distinguish a
      * handler from a thread using MSP and selects a banked register in
      * TrustZone systems.
      */
-    if (xpsr & XPSR_EXCEPTION_NUMBER_MASK) {
+    if (exception_number) {
         struct thread_t *interrupted = base_to_thread(current_base);
         uint32_t frame = active_exception_stack_frame();
         struct thread_t *t;
@@ -380,7 +431,7 @@ static void update_handler_thread(void)
         api->pfLogOutf("%s(): Adding handler thread\n", __func__);
 #endif
         t = new_thread();
-        sprintf(t->name, "EXCEPTION/INTERRUPT");
+        set_handler_thread_name(t, exception_number);
         t->base = GDB_NO_THREAD;
         current_base = GDB_NO_THREAD;
     }
