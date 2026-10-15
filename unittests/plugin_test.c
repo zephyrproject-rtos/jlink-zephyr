@@ -460,6 +460,25 @@ void test_missing_symbols(void)
 	RTOS_Init(&api, 0);
 }
 
+void test_missing_symbols_clear_threads(void)
+{
+	mem = (uint8_t *) &dummy_data;
+	test_init();
+	TEST_ASSERT(RTOS_UpdateThreads() == 0);
+	TEST_ASSERT(RTOS_GetNumThreads() == 2);
+
+	RTOS_SYMBOLS *symbols = RTOS_GetSymbols();
+	uint32_t address = symbols[0].address;
+
+	symbols[0].address = 0;
+	TEST_CHECK(RTOS_UpdateThreads() == -1);
+	TEST_CHECK(RTOS_GetNumThreads() == 1);
+	TEST_CHECK(RTOS_GetCurrentThreadId() == GDB_NO_THREAD);
+	symbols[0].address = address;
+
+	RTOS_Init(&api, 0);
+}
+
 void test_boot(void)
 {
 	mem = (uint8_t *) &boot_dummy_data;
@@ -498,6 +517,7 @@ TEST_LIST = {
    { "test_secure_exception", test_secure_exception},
    { "test_external_interrupt_name", test_external_interrupt_name},
    { "test_missing_symbols", test_missing_symbols},
+   { "test_missing_symbols_clear_threads", test_missing_symbols_clear_threads},
    { "test_boot", test_boot},
    { NULL, NULL }     /* zeroed record marking the end of the list */
 };

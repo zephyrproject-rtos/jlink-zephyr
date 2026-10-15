@@ -829,14 +829,14 @@ EXPORT int RTOS_UpdateThreads(void) {
 #endif
     threads_updated = true;
 
+    clear();
+
     if ((kern_addr == 0) || (thread_info_offsets_addr == 0) ||
         (thread_info_num_offsets_addr == 0) ||
         (thread_info_size_t_size_addr == 0)) {
         api->pfLogOutf("RTOS_UpdateThreads() thread_info symbols not found\n");
         return -1;
     }
-
-    clear();
 
     post_kern = _Symbols[SYMBOLS_INDEX_POST_KERNEL].address;
     if (post_kern) {
