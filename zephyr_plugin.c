@@ -670,12 +670,22 @@ EXPORT int RTOS_UpdateThreads(void) {
 #endif
     threads_updated = true;
 
-    if (thread_info_offsets_addr == 0 || kern_addr == 0) {
-        api->pfLogOutf("RTOS_UpdateThreads() thread_info symbols not found\n");
+    clear();
+
+    if ((kern_addr == 0) || (thread_info_offsets_addr == 0) ||
+        (thread_info_num_offsets_addr == 0) ||
+        (thread_info_size_t_size_addr == 0)) {
+        int i;
+
+        api->pfLogOutf("RTOS_UpdateThreads(): required symbols are missing; "
+                       "enable CONFIG_DEBUG_THREAD_INFO=y. Missing:\n");
+        for (i = SYMBOLS_INDEX_KERNEL; i <= SYMBOLS_INDEX_SIZE_T_SIZE; i++) {
+            if (_Symbols[i].address == 0) {
+                api->pfLogOutf("  %s\n", _Symbols[i].name);
+            }
+        }
         return -1;
     }
-
-    clear();
 
     post_kern = _Symbols[SYMBOLS_INDEX_POST_KERNEL].address;
     if (post_kern) {
