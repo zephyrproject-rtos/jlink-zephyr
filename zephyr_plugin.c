@@ -170,6 +170,8 @@ struct thread_t
 
 /** Has RTOS_UpdateThreads run? */
 bool threads_updated = false;
+/** Is GDB initialized? */
+bool gdb_init = false;
 /** Head of thread list */
 struct thread_t *threads_head = NULL;
 /** Currently running thread */
@@ -543,6 +545,12 @@ EXPORT RTOS_SYMBOLS* RTOS_GetSymbols(void) {
 #ifndef _NO_DEBUG_LOG
     api->pfLogOutf("%s()\n", __func__);
 #endif
+    /* When a new GDB client connects, it checks for new symbols
+     * to look up. In this case it also does not know the current
+     * Thread ID, so send dummy data until we know GDB has retrieved
+     * the actual current Thread ID.
+     */
+    gdb_init = false;
     return _Symbols;
 }
 
@@ -550,6 +558,7 @@ EXPORT uint32_t RTOS_GetCurrentThreadId(void) {
 #if !defined(_NO_DEBUG_LOG) && VERBOSE_LOGGING
     api->pfLogOutf("%s()\n", __func__);
 #endif
+    gdb_init = true;
     return current_base;
 }
 
@@ -558,6 +567,10 @@ EXPORT uint32_t RTOS_GetThreadId(uint32_t n) {
 #if !defined(_NO_DEBUG_LOG) && VERBOSE_LOGGING
     api->pfLogOutf("%s(%d)\n", __func__, n);
 #endif
+    if(!gdb_init) {
+        api->pfLogOutf("gdb not initialized\n");
+        return GDB_NO_THREAD;
+    }
     if (t)
         return t->base;
     else
@@ -569,6 +582,13 @@ EXPORT int RTOS_GetThreadDisplay(char *pDisplay, uint32_t threadid) {
 #if !defined(_NO_DEBUG_LOG) && VERBOSE_LOGGING
     api->pfLogOutf("%s(*, %d)\n", __func__, threadid);
 #endif
+    /* When a new GDB client connects, it checks for thread
+     * display with a dummy ID. Send dummy data until we know
+     * GDB has retrieved the actual current Thread ID.
+     */
+    if(GDB_NO_THREAD == threadid) {
+        gdb_init = false;
+    }
     if (t) {
         return sprintf(pDisplay, "%.32s %s PRIO %hhd", t->name, state_to_str(t), t->prio);
     }
@@ -754,6 +774,11 @@ EXPORT int RTOS_UpdateThreads(void) {
     api->pfLogOutf("%s(): Updated %d threads\n", __func__, n_threads());
 #endif
 
+    if( !gdb_init ) {
+        api->pfLogOutf("gdb not initialized\n");
+        return -1;
+    }
+
     return 0;
 }
 
@@ -774,8 +799,9 @@ EXPORT uint32_t RTOS_GetNumThreads(void) {
     uint32_t threads = n_threads();
     /* GDB gets confused if there is no thread running. Consider the current
      * execution context a thread even if the kernel has not started yet.
+     * Further, if GDB has not fully initialized, pretend there is one thread.
      */
-    if( threads == 0 ) {
+    if(( threads == 0 ) || !gdb_init ) {
         threads = 1;
     }
 #if !defined(_NO_DEBUG_LOG) && VERBOSE_LOGGING

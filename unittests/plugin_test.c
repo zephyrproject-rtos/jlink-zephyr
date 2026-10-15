@@ -304,6 +304,7 @@ void test_parsing(void)
 {
 	mem = (uint8_t *) &dummy_data;
 	test_init();
+	(void)RTOS_GetCurrentThreadId();
 	int ret = RTOS_UpdateThreads();
 	TEST_ASSERT(ret == 0);
 
@@ -312,6 +313,7 @@ void test_parsing(void)
 
 	uint32_t id = RTOS_GetCurrentThreadId();
 	TEST_CHECK(id != 0);
+	TEST_CHECK(id != GDB_NO_THREAD);
 
 	uint32_t id2 = RTOS_GetThreadId(0);
 	uint32_t id1 = RTOS_GetThreadId(1);
@@ -327,6 +329,66 @@ void test_parsing(void)
 
 	// Force clear
 	RTOS_Init(&api, 0);
+}
+
+void check_init(void) {
+	int ret = RTOS_UpdateThreads();
+	TEST_ASSERT(ret == 0);
+
+	uint32_t n = RTOS_GetNumThreads();
+	TEST_CHECK(n == 2);
+
+	uint32_t id = RTOS_GetThreadId(0);
+	TEST_CHECK(id != 0);
+	TEST_CHECK(id != GDB_NO_THREAD);
+}
+
+void check_uninit(void) {
+	int ret = RTOS_UpdateThreads();
+	TEST_ASSERT(ret < 0);
+
+	uint32_t n = RTOS_GetNumThreads();
+	TEST_CHECK(n == 1);
+
+	uint32_t id = RTOS_GetThreadId(0);
+	TEST_CHECK(id == GDB_NO_THREAD);
+}
+
+void test_reconnect(void) {
+	mem = (uint8_t *) &dummy_data;
+	test_init();
+
+	check_uninit();
+
+	uint32_t id = RTOS_GetCurrentThreadId();
+	TEST_CHECK(id != 0);
+	TEST_CHECK(id != GDB_NO_THREAD);
+
+	check_init();
+
+	RTOS_SYMBOLS *symbols = RTOS_GetSymbols();
+
+	check_uninit();
+
+	id = RTOS_GetCurrentThreadId();
+	TEST_CHECK(id != 0);
+	TEST_CHECK(id != GDB_NO_THREAD);
+
+	char display[32];
+	int ret = RTOS_GetThreadDisplay(display, GDB_NO_THREAD);
+	TEST_ASSERT(ret > 0);
+
+	check_uninit();
+
+	id = RTOS_GetCurrentThreadId();
+	TEST_CHECK(id != 0);
+	TEST_CHECK(id != GDB_NO_THREAD);
+
+	check_init();
+
+	// Force clear
+	RTOS_Init(&api, 0);
+
 }
 
 void test_boot(void)
@@ -364,6 +426,7 @@ void test_boot(void)
 TEST_LIST = {
    { "test_init", test_init },
    { "test_parsing", test_parsing},
+   { "test_reconnect", test_reconnect},
    { "test_boot", test_boot},
    { NULL, NULL }     /* zeroed record marking the end of the list */
 };
