@@ -351,6 +351,10 @@ void test_secure_exception(void)
 	TEST_ASSERT(ret == 0);
 	TEST_CHECK(RTOS_GetNumThreads() == 3);
 	TEST_CHECK(RTOS_GetCurrentThreadId() == GDB_NO_THREAD);
+	char display[64];
+	ret = RTOS_GetThreadDisplay(display, GDB_NO_THREAD);
+	TEST_CHECK(ret > 0);
+	TEST_CHECK(0 == strncmp("SecureFault ", display, strlen("SecureFault ")));
 
 	uint32_t interrupted = offsetof(struct dummy_data, thread1);
 	char val[10];
@@ -368,6 +372,23 @@ void test_secure_exception(void)
 	TEST_CHECK(0 == strcmp(expected, val));
 
 	dummy_data.stack.xpsr = 0;
+	RTOS_Init(&api, 0);
+}
+
+void test_external_interrupt_name(void)
+{
+	mem = (uint8_t *) &dummy_data;
+	test_init();
+
+	mock_xpsr = (1 << 24) | (16 + 42);
+	int ret = RTOS_UpdateThreads();
+	TEST_ASSERT(ret == 0);
+
+	char display[64];
+	ret = RTOS_GetThreadDisplay(display, GDB_NO_THREAD);
+	TEST_CHECK(ret > 0);
+	TEST_CHECK(0 == strncmp("IRQ 42 ", display, strlen("IRQ 42 ")));
+
 	RTOS_Init(&api, 0);
 }
 
@@ -436,6 +457,7 @@ TEST_LIST = {
    { "test_init", test_init },
    { "test_parsing", test_parsing},
    { "test_secure_exception", test_secure_exception},
+   { "test_external_interrupt_name", test_external_interrupt_name},
    { "test_boot", test_boot},
    { NULL, NULL }     /* zeroed record marking the end of the list */
 };
