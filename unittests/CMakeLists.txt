@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.16)
 
 project(ZephyrRTOSPlugin)
 
-include (CTest)
 if(BUILD_TESTING)
 	set(CMAKE_BUILD_TYPE Debug)
 	add_executable(plugin_test plugin_test.c ../zephyr_plugin.c)
