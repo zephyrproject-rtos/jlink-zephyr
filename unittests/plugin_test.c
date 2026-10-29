@@ -33,8 +33,14 @@ enum {
   OFFSET_THREAD_STACKPTR,
   OFFSET_THREAD_NAME,
   OFFSET_THREAD_ARCH,
+  OFFSET_THREAD_PREEMPT_FLOAT,
+  OFFSET_THREAD_COOP_FLOAT,
+  OFFSET_THREAD_ARM_EXC_RETURN,
+  OFFSET_END,
 };
-#define LEN_DEBUG_OFFSETS (OFFSET_THREAD_ARCH+1)
+#define LEN_DEBUG_OFFSETS (OFFSET_END)
+
+#define OFFSET_UNIMPLEMENTED 0xffffffff
 
 
 struct my_kernel {
@@ -79,6 +85,8 @@ struct dummy_data {
 	uint32_t padding[1]; // Cannot start from offset zero.
 	struct my_kernel kernel;
 	bool post_kernel;
+	uint8_t size_t_size;
+	uint32_t num_thread_offsets;
 	uint32_t debug_offsets[LEN_DEBUG_OFFSETS];
 	struct my_thread thread1;
 	struct my_thread thread2;
@@ -93,6 +101,8 @@ struct dummy_data dummy_data = {
 		.threads = offsetof(struct dummy_data, thread1)
 	},
 	.post_kernel = true,
+	.size_t_size = sizeof(uint32_t),
+	.num_thread_offsets = LEN_DEBUG_OFFSETS,
 	.thread1 = {
 		.name = "First Thread",
 		.saved = {.psp = offsetof(struct dummy_data, stack) },
@@ -118,6 +128,9 @@ struct dummy_data dummy_data = {
 	offsetof(struct my_thread, saved.psp),
 	offsetof(struct my_thread, name),
 	offsetof(struct my_thread, arch),
+	OFFSET_UNIMPLEMENTED,
+	OFFSET_UNIMPLEMENTED,
+	OFFSET_UNIMPLEMENTED,
 	}
 };
 
@@ -128,6 +141,8 @@ struct dummy_data boot_dummy_data = {
 		.threads = 0
 	},
 	.post_kernel = false,
+	.size_t_size = sizeof(uint32_t),
+	.num_thread_offsets = LEN_DEBUG_OFFSETS,
 	.stack = {
 		.r0 = 0xdeadbeef,
 		.pc = 0xcafebabe,
@@ -144,6 +159,9 @@ struct dummy_data boot_dummy_data = {
 	offsetof(struct my_thread, saved.psp),
 	offsetof(struct my_thread, name),
 	offsetof(struct my_thread, arch),
+	OFFSET_UNIMPLEMENTED,
+	OFFSET_UNIMPLEMENTED,
+	OFFSET_UNIMPLEMENTED,
 	}
 };
 
@@ -329,6 +347,8 @@ void test_init(void)
 	TEST_ASSERT(symbols != NULL);
 	symbols[0].address = offsetof(struct dummy_data, kernel);
 	symbols[1].address = offsetof(struct dummy_data, debug_offsets);
+	symbols[2].address = offsetof(struct dummy_data, num_thread_offsets);
+	symbols[3].address = offsetof(struct dummy_data, size_t_size);
 	symbols[4].address = offsetof(struct dummy_data, post_kernel);
 }
 
@@ -423,6 +443,42 @@ void test_parsing(void)
 	RTOS_Init(&api, 0);
 }
 
+void test_missing_symbols(void)
+{
+	mem = (uint8_t *) &dummy_data;
+	test_init();
+
+	RTOS_SYMBOLS *symbols = RTOS_GetSymbols();
+	for (int i = 0; i < 4; i++) {
+		uint32_t address = symbols[i].address;
+
+		symbols[i].address = 0;
+		TEST_CHECK(RTOS_UpdateThreads() == -1);
+		symbols[i].address = address;
+	}
+
+	RTOS_Init(&api, 0);
+}
+
+void test_missing_symbols_clear_threads(void)
+{
+	mem = (uint8_t *) &dummy_data;
+	test_init();
+	TEST_ASSERT(RTOS_UpdateThreads() == 0);
+	TEST_ASSERT(RTOS_GetNumThreads() == 2);
+
+	RTOS_SYMBOLS *symbols = RTOS_GetSymbols();
+	uint32_t address = symbols[0].address;
+
+	symbols[0].address = 0;
+	TEST_CHECK(RTOS_UpdateThreads() == -1);
+	TEST_CHECK(RTOS_GetNumThreads() == 1);
+	TEST_CHECK(RTOS_GetCurrentThreadId() == GDB_NO_THREAD);
+	symbols[0].address = address;
+
+	RTOS_Init(&api, 0);
+}
+
 void test_boot(void)
 {
 	mem = (uint8_t *) &boot_dummy_data;
@@ -460,6 +516,8 @@ TEST_LIST = {
    { "test_parsing", test_parsing},
    { "test_secure_exception", test_secure_exception},
    { "test_external_interrupt_name", test_external_interrupt_name},
+   { "test_missing_symbols", test_missing_symbols},
+   { "test_missing_symbols_clear_threads", test_missing_symbols_clear_threads},
    { "test_boot", test_boot},
    { NULL, NULL }     /* zeroed record marking the end of the list */
 };

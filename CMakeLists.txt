@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.16)
 
 project(ZephyrRTOSPlugin)
 
+include(CTest)
+
 add_library (zephyr_rtos MODULE zephyr_plugin.c)
 
 if (NOT MSVC)
